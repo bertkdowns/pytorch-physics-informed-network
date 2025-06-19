@@ -1,5 +1,3 @@
-import torch
-
 def heat_exchanger_residual(x, y):
     """
     Physics residual for heat exchanger energy balance.

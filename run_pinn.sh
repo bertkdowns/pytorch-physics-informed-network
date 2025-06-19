@@ -10,11 +10,11 @@ mkdir -p data models
 
 # Step 1: Generate data
 echo "[1/2] Generating heat exchanger data..."
-python generate_heat_exchanger_data.py
+python src/generate_heat_exchanger_data.py
 
 # Step 2: Train the model
 echo "[2/2] Training physics-informed neural network..."
-python residual-network.py
+python src/residual-network.py
 
 echo "===== Workflow Complete! ====="
 echo "Generated data saved to data/ directory"
