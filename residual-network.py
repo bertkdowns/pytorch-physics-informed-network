@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from heat_exchanger_physics import heat_exchanger_residual
 
 
 class rMLP(nn.Module):
-    def __init__(self, input_dim=4, hidden_dim=4, output_dim=1):
+    def __init__(self, input_dim=4, hidden_dim=32, output_dim=2):
         super(rMLP, self).__init__()
         
         # Layer 1
@@ -18,7 +19,7 @@ class rMLP(nn.Module):
         self.skip2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         
         # Output layer
-        self.output = nn.Linear(hidden_dim, output_dim)
+        self.output = nn.Linear(hidden_dim, output_dim)  # Will predict both temperatures
 
         # Xavier initialization
         for m in self.modules():
@@ -47,47 +48,98 @@ def physics_loss(x, model, pde_func):
     return torch.mean(residual**2)
 
 
-def train_model(model, train_data, train_targets, pde_func, epochs=1000, lr=1e-3, λ1=1.0, λ2=1.0):
+def train_model(model, train_data, train_targets, pde_func, epochs=1000, 
+                lr=1e-3, λ1=1.0, λ2=0.01, use_meta_learning=True):
     optimizer = optim.Adam(model.parameters(), lr=lr)
-
+    
+    # Initialise weights for physics components as per paper (https://www.sciencedirect.com/science/article/pii/S0098135425002157?via%3Dihub)
+    # Paper: w_i = 100 initially, λ2*w_i = 1
+    if use_meta_learning:
+        # Initialize weights as trainable parameters
+        w = torch.nn.Parameter(torch.ones(1) * 100.0, requires_grad=True)
+        # Learning rate for meta-learning (η in equation 21)
+        meta_lr = 0.01
+    else:
+        # Fixed weights when not using meta-learning (PI-rMLP case)
+        w = torch.tensor([100.0])
+    
     for epoch in range(epochs):
         model.train()
         optimizer.zero_grad()
-
+        
         # Forward pass
         pred = model(train_data)
-
+        
         # Compute losses
         loss_emp = empirical_loss(pred, train_targets)
         loss_pde = physics_loss(train_data.clone(), model, pde_func)
-
-        loss = λ1 * loss_emp + λ2 * loss_pde
-
-        loss.backward()
+        
+        # Total loss with weighted physics component (λ2*w*loss_pde)
+        loss = λ1 * loss_emp + λ2 * w * loss_pde
+        
+        # Backward pass for model parameters
+        loss.backward(retain_graph=use_meta_learning)
         optimizer.step()
-
+        
+        # Meta-learning step: update the weights if enabled
+        # Following equation (21): w_i = w_i - η * ∂L/∂w_i
+        if use_meta_learning:
+            # Get gradient of loss with respect to w
+            grad_w = w.grad
+            
+            if grad_w is not None:
+                # Update w directly using equation (21)
+                with torch.no_grad():
+                    w.data -= meta_lr * grad_w
+                    # Projection step: w_i = max(1, w_i) as mentioned in the paper
+                    w.data = torch.clamp(w.data, min=1.0)
+                
+                # Zero the accumulated gradients
+                w.grad.zero_()
+        
         if epoch % 100 == 0 or epoch == epochs - 1:
-            print(f"Epoch {epoch}: Total Loss={loss.item():.6f}, Empirical={loss_emp.item():.6f}, PDE={loss_pde.item():.6f}")
-
-
-# Example placeholder PDE function
-def example_pde(x, y):
-    """Dummy PDE: dy/dx0 + dy/dx1 = 0"""
-    grads = torch.autograd.grad(
-        outputs=y, inputs=x,
-        grad_outputs=torch.ones_like(y),
-        create_graph=True, retain_graph=True
-    )[0]
-    return grads[:, 0] + grads[:, 1]  # sum of partial derivatives w.r.t. x0 and x1
-
+            print(f"Epoch {epoch}: Total Loss={loss.item():.6f}, "
+                  f"Empirical={loss_emp.item():.6f}, "
+                  f"PDE={loss_pde.item():.6f}, "
+                  f"w={w.item():.6f}")
+            
 
 # Example usage
 if __name__ == "__main__":
     torch.manual_seed(0)
-
-    # Generate dummy training data
-    X_train = torch.rand((64, 4))  # 64 samples, 4 features: [m˙WF, m˙B, TinWF, TinB]
-    y_train = torch.rand((64, 1))  # target output
-
-    model = rMLP()
-    train_model(model, X_train, y_train, example_pde, epochs=1000, lr=1e-3, λ1=1.0, λ2=0.1)
+    
+    # Load the generated data from the data directory
+    X_train = torch.load("data/heat_exchanger_inputs.pt")
+    y_train = torch.load("data/heat_exchanger_outputs.pt")
+    print(f"Loaded {len(X_train)} samples for training")
+    
+    # Create the model - make sure output_dim is 2 for both temperatures
+    model = rMLP(input_dim=4, hidden_dim=32, output_dim=2)
+    
+    # Train with meta-learning physics-informed loss (MLPI-rMLP)
+    train_model(
+        model, 
+        X_train, 
+        y_train, 
+        heat_exchanger_residual,
+        epochs=2000,
+        lr=3e-4,                 # Model learning rate
+        λ1=1.0,                  # Fixed weight for empirical loss (fixed at 1 per paper)
+        λ2=0.01,                 # Weight for physics loss (0.01 per paper)
+        use_meta_learning=True   # Enable meta-learning for physics weights
+    )
+    
+    # Test the model
+    model.eval()  # Set to evaluation mode
+    test_input = torch.tensor([[0.18, 0.15, 390.0, 295.0]], dtype=torch.float32)
+    with torch.no_grad():
+        prediction = model(test_input)
+    
+    print("\nTest prediction:")
+    print(f"Input: m_hot={test_input[0,0]:.3f} kg/s, m_cold={test_input[0,1]:.3f} kg/s")
+    print(f"       T_hot_in={test_input[0,2]:.1f}K, T_cold_in={test_input[0,3]:.1f}K")
+    print(f"Predicted: T_hot_out={prediction[0,0]:.2f}K, T_cold_out={prediction[0,1]:.2f}K")
+    
+    # Save the trained model to the models directory
+    torch.save(model.state_dict(), "models/heat_exchanger_pinn_model.pt")
+    print("Model saved to models/heat_exchanger_pinn_model.pt")
