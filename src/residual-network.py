@@ -104,6 +104,30 @@ def train_model(model, train_data, train_targets, pde_func, epochs=1000,
                   f"w={w.item():.6f}")
             
 
+def export_to_onnx(model, train_data):
+    """Export the trained model to ONNX format using a real sample from training data."""
+    # Ensure model is in evaluation mode
+    model.eval()
+    
+    # Use first sample from training data
+    example_input = train_data[0:1]  # First sample with batch dimension of 1
+    
+    # Export to ONNX
+    torch.onnx.export(
+        model,                           # The trained model
+        example_input,                   # Example input from real data
+        "models/heat_exchanger_pinn.onnx",  # Output file path
+        export_params=True,              # Store trained parameters
+        opset_version=12,                # ONNX version
+        do_constant_folding=True,        # Optimization
+        input_names=['input'],           # Name of model inputs
+        output_names=['output'],         # Name of model outputs
+        dynamic_axes={'input': {0: 'batch_size'},    # Variable dimensions
+                      'output': {0: 'batch_size'}}
+    )
+    print("\nModel exported to ONNX format: models/heat_exchanger_pinn.onnx")
+    
+
 # Example usage
 if __name__ == "__main__":
     torch.manual_seed(0)
@@ -143,3 +167,5 @@ if __name__ == "__main__":
     # Save the trained model to the models directory
     torch.save(model.state_dict(), "models/heat_exchanger_pinn_model.pt")
     print("Model saved to models/heat_exchanger_pinn_model.pt")
+
+    export_to_onnx(model, X_train)
