@@ -21,7 +21,7 @@ class rMLP(nn.Module):
         # Output layer
         self.output = nn.Linear(hidden_dim, output_dim)  # Will predict both temperatures
 
-        # Xavier initialization
+        # Xavier initialisation
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
