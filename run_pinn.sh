@@ -14,7 +14,7 @@ python src/generate_heat_exchanger_data.py
 
 # Step 2: Train the model
 echo "[2/2] Training physics-informed neural network..."
-python src/residual-network.py
+python src/residual_network.py
 
 echo "===== Workflow Complete! ====="
 echo "Generated data saved to data/ directory"
