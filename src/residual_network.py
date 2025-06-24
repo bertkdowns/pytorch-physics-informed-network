@@ -10,13 +10,13 @@ class rMLP(nn.Module):
         
         # Layer 1
         self.linear1 = nn.Linear(input_dim, hidden_dim)
-        self.bn1 = nn.BatchNorm1d(hidden_dim)
-        self.skip1 = nn.Linear(input_dim, hidden_dim, bias=False)
+        # self.bn1 = nn.BatchNorm1d(hidden_dim)
+        # self.skip1 = nn.Linear(input_dim, hidden_dim, bias=False)
         
         # Layer 2
         self.linear2 = nn.Linear(hidden_dim, hidden_dim)
-        self.bn2 = nn.BatchNorm1d(hidden_dim)
-        self.skip2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        # self.bn2 = nn.BatchNorm1d(hidden_dim)
+        # self.skip2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
         
         # Output layer
         self.output = nn.Linear(hidden_dim, output_dim)  # Will predict both temperatures
@@ -29,9 +29,9 @@ class rMLP(nn.Module):
                     nn.init.zeros_(m.bias)
 
     def forward(self, x):
-        h1 = self.bn1(torch.relu(self.linear1(x))) + self.skip1(x)
-        h2 = self.bn2(torch.relu(self.linear2(h1))) + self.skip2(h1)
-        y = self.output(h2)
+        h1 = torch.relu(self.linear1(x))
+        h2 = torch.relu(self.linear2(h1))
+        y  = self.output(h2)
         return y
 
 
