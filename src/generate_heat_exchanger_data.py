@@ -3,7 +3,6 @@ import numpy as np
 
 from idaes.core import FlowsheetBlock
 from idaes.models.unit_models.heat_exchanger import HeatExchanger
-from idaes.core.util.model_statistics import degrees_of_freedom
 from pyomo.environ import ConcreteModel, SolverFactory, value
 from property_packages.build_package import build_package
 
