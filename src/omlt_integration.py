@@ -1,11 +1,8 @@
-import os
 import onnx
 import pyomo.environ as pyo
 from omlt import OmltBlock
 from omlt.neuralnet import FullSpaceNNFormulation
 from omlt.io import load_onnx_neural_network
-import torch
-import numpy as np
 
 def create_heat_exchanger_omlt_model(onnx_path="models/heat_exchanger_pinn.onnx"):
     """

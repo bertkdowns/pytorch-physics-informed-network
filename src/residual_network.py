@@ -6,6 +6,12 @@ from heat_exchanger_physics import heat_exchanger_residual
 
 class rMLP(nn.Module):
     def __init__(self, input_dim=4, hidden_dim=32, output_dim=2):
+        '''
+        Residual Multi-Layer Perceptron (rMLP) for heat exchanger modeling.
+        The commented out code shows the original architecture with batch normalization and skip connections.
+        They were removed because OMLT requires simple feed-forward networks (linear layers + activations) 
+        for successful ONNX parsing. The simpler architecture remains effective while enabling Pyomo integration.
+        '''
         super(rMLP, self).__init__()
         
         # Layer 1
@@ -31,9 +37,14 @@ class rMLP(nn.Module):
     def forward(self, x):
         h1 = torch.relu(self.linear1(x))
         h2 = torch.relu(self.linear2(h1))
-        y  = self.output(h2)
+        y = self.output(h2)
         return y
 
+    # def forward(self, x):
+    #     h1 = self.bn1(torch.relu(self.linear1(x))) + self.skip1(x)
+    #     h2 = self.bn2(torch.relu(self.linear2(h1))) + self.skip2(h1)
+    #     y = self.output(h2)
+    #     return y
 
 def empirical_loss(pred, target):
     return nn.MSELoss()(pred, target)

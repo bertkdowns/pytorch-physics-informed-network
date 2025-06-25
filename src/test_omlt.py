@@ -5,6 +5,8 @@ def test_omlt():
     model = create_heat_exchanger_omlt_model("models/heat_exchanger_pinn.onnx")
     
     # Example: add a trivial objective to see if it solves
+    # In practice, you would define a meaningful objective based on your problem
+    # such as minimising energy usage or maximising heat transfer
     model.obj = pyo.Objective(expr=(model.m_hot - 0.18)**2)
 
     solver = pyo.SolverFactory("ipopt")
