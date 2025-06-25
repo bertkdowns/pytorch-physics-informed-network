@@ -48,7 +48,5 @@ def test_omlt():
     print(f"  T_hot_out = {pyo.value(model.T_hot_out):.6f} K")
     print(f"  T_cold_out = {pyo.value(model.T_cold_out):.6f} K")
     
-    print(f"Difference: {abs(ort_outputs[0][0][0] - pyo.value(model.T_hot_out)):.6f} K")
-
 if __name__ == '__main__':
     test_omlt()
