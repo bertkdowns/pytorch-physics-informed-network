@@ -70,7 +70,7 @@ def generate_heat_exchanger_data(num_samples=20, visualise=True, criterion='ese'
     ])
     
     # Create LHS sampler with enhanced space-filling properties (ESE criterion)
-    sampling = LHS(xlimits=xlimits, criterion=criterion, random_state=42)
+    sampling = LHS(xlimits=xlimits, criterion=criterion)
     
     # Generate samples using Latin Hypercube method
     lhs_samples = sampling(num_samples)
