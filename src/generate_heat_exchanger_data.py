@@ -1,15 +1,53 @@
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 
 from idaes.core import FlowsheetBlock
 from idaes.models.unit_models.heat_exchanger import HeatExchanger
 from pyomo.environ import ConcreteModel, SolverFactory, value
 from property_packages.build_package import build_package
+from smt.sampling_methods import LHS
 
 
-def generate_heat_exchanger_data(num_samples=20):
+def visualise_samples(samples, xlimits, filename="data/lhs_sampling_visualisation.png"):
     """
-    Generate steady-state heat exchanger data by varying flow rates and inlet temperatures.
+    Visualise the distribution of samples across input parameters
+    to verify the quality of Latin Hypercube Sampling.
+    """
+    param_names = ['m_hot (mol/s)', 'm_cold (mol/s)', 'T_hot_in (K)', 'T_cold_in (K)']
+    fig, axs = plt.subplots(2, 3, figsize=(15, 10))
+    axs = axs.flatten()
+    
+    # Plot all pairwise projections
+    plot_idx = 0
+    for i in range(4):
+        for j in range(i+1, 4):
+            ax = axs[plot_idx]
+            ax.scatter(samples[:, i], samples[:, j], alpha=0.7)
+            ax.set_xlabel(param_names[i])
+            ax.set_ylabel(param_names[j])
+            ax.grid(True)
+            
+            # Add bounds from xlimits
+            ax.set_xlim([xlimits[i][0], xlimits[i][1]])
+            ax.set_ylim([xlimits[j][0], xlimits[j][1]])
+            
+            plot_idx += 1
+    
+    plt.tight_layout()
+    plt.savefig(filename)
+    print(f"Sampling visualisation saved to {filename}")
+
+
+def generate_heat_exchanger_data(num_samples=20, visualise=True, criterion='ese'):
+    """
+    Generate steady-state heat exchanger data using Latin Hypercube Sampling
+    to efficiently explore the parameter space of flow rates and inlet temperatures.
+    
+    Args:
+        num_samples: Number of data points to generate
+        visualise: Whether to create a visualisation of the sampled points
+        criterion: LHS criterion ('ese' is recommended for best space-filling)
     """
     X_data = []  # inputs
     y_data = []  # outputs
@@ -23,6 +61,28 @@ def generate_heat_exchanger_data(num_samples=20):
     # Approx. conversion for water (18 g/mol => 0.018 kg/mol)
     mol_to_kg = 0.018
 
+    # Define parameter space for Latin Hypercube Sampling
+    xlimits = np.array([
+        m_hot_range,     # m_hot range
+        m_cold_range,    # m_cold range
+        T_hot_in_range,  # T_hot_in range
+        T_cold_in_range  # T_cold_in range
+    ])
+    
+    # Create LHS sampler with enhanced space-filling properties (ESE criterion)
+    sampling = LHS(xlimits=xlimits, criterion=criterion, random_state=42)
+    
+    # Generate samples using Latin Hypercube method
+    lhs_samples = sampling(num_samples)
+    
+    print(f"Generated {num_samples} Latin Hypercube samples with '{criterion}' criterion")
+    
+    # Visualise the distribution of samples if requested
+    if visualise:
+        visualise_samples(lhs_samples, xlimits)
+
+    # Process each sample point
+    successful_samples = 0
     for i in range(num_samples):
         # Build a new model
         m = ConcreteModel()
@@ -34,11 +94,11 @@ def generate_heat_exchanger_data(num_samples=20):
             cold_side={"property_package": m.fs.water_props},
         )
 
-        # Generate random input values within the specified ranges
-        m_hot = np.random.uniform(m_hot_range[0], m_hot_range[1])  # mol/s
-        m_cold = np.random.uniform(m_cold_range[0], m_cold_range[1])  # mol/s
-        T_hot_in = np.random.uniform(T_hot_in_range[0], T_hot_in_range[1])  # K
-        T_cold_in = np.random.uniform(T_cold_in_range[0], T_cold_in_range[1])  # K
+        # Extract parameter values from LHS sample
+        m_hot = lhs_samples[i, 0]      # mol/s
+        m_cold = lhs_samples[i, 1]     # mol/s
+        T_hot_in = lhs_samples[i, 2]   # K
+        T_cold_in = lhs_samples[i, 3]  # K
 
         # Fix hot side conditions
         m.fs.hx.hot_side_inlet.flow_mol.fix(m_hot)
@@ -78,6 +138,7 @@ def generate_heat_exchanger_data(num_samples=20):
                 # Store for training
                 X_data.append([m_hot_kg, m_cold_kg, T_hot_in, T_cold_in])
                 y_data.append([T_hot_out, T_cold_out])
+                successful_samples += 1
                 print(f"[{i+1}/{num_samples}] Input=({m_hot_kg:.3f}, {m_cold_kg:.3f}, {T_hot_in:.2f}, {T_cold_in:.2f}) => "
                       f"Output=({T_hot_out:.2f}, {T_cold_out:.2f})")
             else:
@@ -93,11 +154,11 @@ def generate_heat_exchanger_data(num_samples=20):
     torch.save(X_tensor, "data/heat_exchanger_inputs.pt")
     torch.save(y_tensor, "data/heat_exchanger_outputs.pt")
     
-    print(f"\nGenerated {len(X_tensor)} data points.")
+    print(f"\nGenerated {len(X_tensor)}/{num_samples} valid data points using Latin Hypercube Sampling.")
     return X_tensor, y_tensor
 
 
 if __name__ == "__main__":
-    # You can customise how many samples to generate
-    X, y = generate_heat_exchanger_data(num_samples=20)
+    # You can customize how many samples to generate
+    X, y = generate_heat_exchanger_data(num_samples=20, visualise=True, criterion='ese')
     print("Saved X to data/heat_exchanger_inputs.pt and y to data/heat_exchanger_outputs.pt.")
