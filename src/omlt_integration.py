@@ -35,16 +35,11 @@ def create_heat_exchanger_omlt_model(onnx_path="models/heat_exchanger_pinn.onnx"
     formulation = FullSpaceNNFormulation(net)
     model.nn_block.build_formulation(formulation)
 
-    model.nn_block.scaled_inputs[0].value = 0.18
-    model.nn_block.scaled_inputs[1].value = 0.15
-    model.nn_block.scaled_inputs[2].value = 390.0
-    model.nn_block.scaled_inputs[3].value = 300.0
-
     # Define Pyomo variables for the inputs
-    model.m_hot = pyo.Var(bounds=input_bounds[0], initialize=0.18)    # mass flow hot
-    model.m_cold = pyo.Var(bounds=input_bounds[1], initialize=0.15)   # mass flow cold
-    model.T_hot_in = pyo.Var(bounds=input_bounds[2], initialize=390.0) # inlet temp hot
-    model.T_cold_in = pyo.Var(bounds=input_bounds[3], initialize=300.0) # inlet temp cold
+    model.m_hot = pyo.Var(bounds=input_bounds[0])    # mass flow hot
+    model.m_cold = pyo.Var(bounds=input_bounds[1])   # mass flow cold
+    model.T_hot_in = pyo.Var(bounds=input_bounds[2]) # inlet temp hot
+    model.T_cold_in = pyo.Var(bounds=input_bounds[3]) # inlet temp cold
 
     # Define Pyomo variables for the model outputs
     model.T_hot_out = pyo.Var()
